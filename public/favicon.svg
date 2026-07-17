@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="113" ry="113" fill="#121212" />
+  <text x="256" y="234" text-anchor="middle" font-family="'Arial Black', 'Yu Gothic', sans-serif" font-weight="900" font-size="260" fill="#BB86FC">To</text>
+  <text x="256" y="460" text-anchor="middle" font-family="'Arial Black', 'Yu Gothic', sans-serif" font-weight="900" font-size="260" fill="#03DAC6">Do</text>
+</svg>
