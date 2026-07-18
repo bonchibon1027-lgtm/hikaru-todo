@@ -1017,3 +1017,130 @@
   margin-bottom: 4px;
   filter: drop-shadow(0 0 10px rgba(187, 134, 252, 0.5));
 }
+
+/* ==========================================================================
+   v2.1: ドラッグ&ドロップ
+   ========================================================================== */
+
+.drag-handle {
+  position: relative;
+  width: 18px;
+  height: 26px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: #5a5a5a;
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drag-handle svg circle {
+  fill: currentColor;
+}
+
+.drag-handle:hover {
+  color: var(--color-mint);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* タップ領域を44px以上に拡張(見た目のサイズは変えない) */
+.drag-handle::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+}
+
+body.dnd-active {
+  cursor: grabbing;
+}
+
+body.dnd-active * {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+/* ドラッグ中の行(元の位置に留まったまま浮き上がる) */
+.dnd-dragging {
+  opacity: 0.45;
+  box-shadow: 0 0 0 2px rgba(187, 134, 252, 0.55), 0 10px 24px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 5;
+}
+
+/* 無効な操作:ドロップ位置へのスナップ後に揺れて否定を伝える */
+@keyframes dnd-shake-kf {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+.dnd-shake {
+  animation: dnd-shake-kf 400ms ease;
+  box-shadow: 0 0 0 2px rgba(255, 82, 82, 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dnd-shake {
+    animation: none;
+  }
+}
+
+/* 挿入位置インジケータ(ネオンパープルの線) */
+.dnd-indicator-line {
+  position: fixed;
+  height: 3px;
+  background: var(--color-purple);
+  box-shadow: 0 0 6px rgba(187, 134, 252, 0.9), 0 0 14px rgba(187, 134, 252, 0.6);
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: 80;
+  transform: translateY(-1.5px);
+}
+
+/* 昇格/降格・無効操作の説明バッジ(ポインタ追従) */
+.dnd-badge {
+  position: fixed;
+  transform: translate(14px, -50%);
+  background: var(--color-surface-raised);
+  color: var(--color-mint);
+  border: 1px solid var(--color-mint);
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 81;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+
+.dnd-badge--invalid {
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}

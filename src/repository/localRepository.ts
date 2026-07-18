@@ -187,7 +187,7 @@ export class LocalRepository implements Repository {
     return step;
   }
 
-  async updateStep(id: string, patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder'>>): Promise<void> {
+  async updateStep(id: string, patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId'>>): Promise<void> {
     // in-place mutateしない(理由はupdateFolder参照)
     const idx = this.data.steps.findIndex((s) => s.id === id);
     if (idx === -1) return;
@@ -219,7 +219,10 @@ export class LocalRepository implements Repository {
     return todo;
   }
 
-  async updateTodo(id: string, patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt'>>): Promise<void> {
+  async updateTodo(
+    id: string,
+    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId'>>
+  ): Promise<void> {
     // in-place mutateしない(理由はupdateFolder参照)
     const idx = this.data.todos.findIndex((t) => t.id === id);
     if (idx === -1) return;

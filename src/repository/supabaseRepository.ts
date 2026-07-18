@@ -196,12 +196,13 @@ export class SupabaseRepository implements Repository {
     return stepFromRow(data as StepRow);
   }
 
-  async updateStep(id: string, patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder'>>): Promise<void> {
+  async updateStep(id: string, patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId'>>): Promise<void> {
     const db = client();
     const row: Record<string, unknown> = {};
     if (patch.title !== undefined) row.title = patch.title;
     if (patch.status !== undefined) row.status = patch.status;
     if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+    if (patch.goalId !== undefined) row.goal_id = patch.goalId;
     const { error } = await db.from('steps').update(row).eq('id', id);
     if (error) throw error;
   }
@@ -230,13 +231,17 @@ export class SupabaseRepository implements Repository {
     return todoFromRow(data as TodoRow);
   }
 
-  async updateTodo(id: string, patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt'>>): Promise<void> {
+  async updateTodo(
+    id: string,
+    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId'>>
+  ): Promise<void> {
     const db = client();
     const row: Record<string, unknown> = {};
     if (patch.title !== undefined) row.title = patch.title;
     if (patch.done !== undefined) row.done = patch.done;
     if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
     if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
+    if (patch.stepId !== undefined) row.step_id = patch.stepId;
     const { error } = await db.from('todos').update(row).eq('id', id);
     if (error) throw error;
   }

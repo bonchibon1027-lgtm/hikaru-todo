@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { Todo } from '../types';
 import InlineText from './InlineText';
+import DragHandle from './DragHandle';
 import { triggerClickFeel } from '../utils/clickFeel';
 import { loadUiPrefs } from '../utils/uiPrefs';
+import { useDragRowState } from '../dnd/DragContext';
 
 interface Props {
   todo: Todo;
@@ -10,11 +12,14 @@ interface Props {
   onRename: (title: string) => void;
   onDelete: () => void;
   meta?: string; // 「ゴール名 › ステップ名」など
+  /** ツリービュー(StepBlock配下)でのみtrue。Todoビューではドラッグ&ドロップ非対応のため付けない */
+  draggable?: boolean;
 }
 
-export default function TodoRow({ todo, onToggle, onRename, onDelete, meta }: Props) {
+export default function TodoRow({ todo, onToggle, onRename, onDelete, meta, draggable = false }: Props) {
   const [justCompleted, setJustCompleted] = useState(false);
   const [pressed, setPressed] = useState(false);
+  const { isDragging, isShaking } = useDragRowState('todo', todo.id);
 
   function handleToggle() {
     setPressed(true);
@@ -28,7 +33,12 @@ export default function TodoRow({ todo, onToggle, onRename, onDelete, meta }: Pr
   }
 
   return (
-    <div className={`todo-row${todo.done ? ' todo-row--done' : ''}`}>
+    <div
+      className={`todo-row${todo.done ? ' todo-row--done' : ''}${draggable && isDragging ? ' dnd-dragging' : ''}${draggable && isShaking ? ' dnd-shake' : ''}`}
+      data-drag-row={draggable ? 'todo' : undefined}
+      data-drag-id={draggable ? todo.id : undefined}
+    >
+      {draggable && <DragHandle kind="todo" id={todo.id} label={`Todo「${todo.title}」`} />}
       <button
         type="button"
         className={`todo-checkbox${justCompleted ? ' todo-checkbox--flash' : ''}${todo.done ? ' todo-checkbox--checked' : ''}${pressed ? ' checkbox--press' : ''}`}

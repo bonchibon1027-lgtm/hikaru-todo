@@ -5,7 +5,9 @@ import ProgressBar from './ProgressBar';
 import InlineText from './InlineText';
 import StepBlock from './StepBlock';
 import AddInlineForm from './AddInlineForm';
+import DragHandle from './DragHandle';
 import { useData } from '../context/DataContext';
+import { useDragRowState } from '../dnd/DragContext';
 
 interface Props {
   goal: Goal;
@@ -19,6 +21,7 @@ export default function GoalCard({ goal, steps, todos }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderSubmenu, setFolderSubmenu] = useState(false);
   const [editingDue, setEditingDue] = useState(false);
+  const { isDragging, isShaking } = useDragRowState('goal', goal.id);
 
   const percent = calcGoalProgressPercent(steps, todos);
   const dueLabel = formatDueLabel(goal.dueDate);
@@ -30,8 +33,13 @@ export default function GoalCard({ goal, steps, todos }: Props) {
   }
 
   return (
-    <div className={`goal-card${goal.status !== 'active' ? ' goal-card--inactive' : ''}`}>
+    <div
+      className={`goal-card${goal.status !== 'active' ? ' goal-card--inactive' : ''}${isDragging ? ' dnd-dragging' : ''}${isShaking ? ' dnd-shake' : ''}`}
+      data-drag-row="goal"
+      data-drag-id={goal.id}
+    >
       <div className="goal-card-header">
+        <DragHandle kind="goal" id={goal.id} label={`ゴール「${goal.title}」`} />
         <button
           type="button"
           className="expand-toggle"
@@ -129,7 +137,7 @@ export default function GoalCard({ goal, steps, todos }: Props) {
               key={step.id}
               step={step}
               stepNumber={idx + 1}
-              todos={todos.filter((t) => t.stepId === step.id)}
+              todos={todos.filter((t) => t.stepId === step.id).sort((a, b) => a.sortOrder - b.sortOrder)}
               isCurrent={currentStep?.id === step.id}
             />
           ))}

@@ -4,9 +4,11 @@ import { calcTodoProgress, calcStepProgressPercent } from '../utils/progress';
 import InlineText from './InlineText';
 import TodoRow from './TodoRow';
 import AddInlineForm from './AddInlineForm';
+import DragHandle from './DragHandle';
 import { useData } from '../context/DataContext';
 import { triggerClickFeel } from '../utils/clickFeel';
 import { loadUiPrefs } from '../utils/uiPrefs';
+import { useDragRowState } from '../dnd/DragContext';
 
 interface Props {
   step: Step;
@@ -26,6 +28,7 @@ export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props)
   const [pressed, setPressed] = useState(false);
   const prevIsDone = useRef(isDone);
   const prevIsCurrent = useRef(isCurrent);
+  const { isDragging, isShaking } = useDragRowState('step', step.id);
 
   useEffect(() => {
     if (isDone && !prevIsDone.current) {
@@ -43,8 +46,13 @@ export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props)
   }, [isCurrent, isDone]);
 
   return (
-    <div className={`step-block${isDone ? ' step-block--done' : ''}`}>
+    <div
+      className={`step-block${isDone ? ' step-block--done' : ''}${isDragging ? ' dnd-dragging' : ''}${isShaking ? ' dnd-shake' : ''}`}
+      data-drag-row="step"
+      data-drag-id={step.id}
+    >
       <div className="step-header" onClick={() => setExpanded((v) => !v)}>
+        <DragHandle kind="step" id={step.id} label={`ステップ「${step.title}」`} />
         <button
           type="button"
           className={`step-checkbox${isDone ? ' step-checkbox--checked' : ''}${pressed ? ' checkbox--press' : ''}`}
@@ -100,6 +108,7 @@ export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props)
               <TodoRow
                 key={todo.id}
                 todo={todo}
+                draggable
                 onToggle={() => toggleTodo(todo.id)}
                 onRename={(title) => renameTodo(todo.id, title)}
                 onDelete={() => removeTodo(todo.id)}

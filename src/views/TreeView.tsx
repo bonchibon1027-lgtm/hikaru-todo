@@ -6,6 +6,7 @@ import AddFolderButton from '../components/AddFolderButton';
 import AddGoalForm from '../components/AddGoalForm';
 import JsonImportPanel from '../components/JsonImportPanel';
 import JsonExportPanel from '../components/JsonExportPanel';
+import { DragProvider } from '../dnd/DragContext';
 
 const STATUS_ORDER = { active: 0, done: 1, archived: 2 } as const;
 
@@ -33,24 +34,26 @@ export default function TreeView() {
           <p>ゴールを追加してはじめよう</p>
         </div>
       )}
-      <AddFolderButton />
-      <div className="goal-list">
-        {sortedFolders.map((folder) => {
-          const folderGoals = sortGoals(goals.filter((g) => g.folderId === folder.id));
-          return <FolderCard key={folder.id} folder={folder} goals={folderGoals} steps={steps} todos={todos} />;
-        })}
-        {topLevelGoals.map((goal) => {
-          const goalSteps = steps.filter((s) => s.goalId === goal.id).sort((a, b) => a.sortOrder - b.sortOrder);
-          const stepIds = new Set(goalSteps.map((s) => s.id));
-          const goalTodos = todos.filter((t) => stepIds.has(t.stepId));
-          return <GoalCard key={goal.id} goal={goal} steps={goalSteps} todos={goalTodos} />;
-        })}
-      </div>
-      <AddGoalForm />
-      <div className="json-actions-row">
-        <JsonImportPanel />
-        <JsonExportPanel />
-      </div>
+      <DragProvider>
+        <AddFolderButton />
+        <div className="goal-list">
+          {sortedFolders.map((folder) => {
+            const folderGoals = sortGoals(goals.filter((g) => g.folderId === folder.id));
+            return <FolderCard key={folder.id} folder={folder} goals={folderGoals} steps={steps} todos={todos} />;
+          })}
+          {topLevelGoals.map((goal) => {
+            const goalSteps = steps.filter((s) => s.goalId === goal.id).sort((a, b) => a.sortOrder - b.sortOrder);
+            const stepIds = new Set(goalSteps.map((s) => s.id));
+            const goalTodos = todos.filter((t) => stepIds.has(t.stepId));
+            return <GoalCard key={goal.id} goal={goal} steps={goalSteps} todos={goalTodos} />;
+          })}
+        </div>
+        <AddGoalForm />
+        <div className="json-actions-row">
+          <JsonImportPanel />
+          <JsonExportPanel />
+        </div>
+      </DragProvider>
     </div>
   );
 }

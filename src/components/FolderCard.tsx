@@ -4,7 +4,9 @@ import { calcFolderProgressPercent } from '../utils/progress';
 import ProgressBar from './ProgressBar';
 import InlineText from './InlineText';
 import GoalCard from './GoalCard';
+import DragHandle from './DragHandle';
 import { useData } from '../context/DataContext';
+import { useDragRowState } from '../dnd/DragContext';
 
 interface Props {
   folder: Folder;
@@ -16,6 +18,7 @@ interface Props {
 export default function FolderCard({ folder, goals, steps, todos }: Props) {
   const { renameFolder, removeFolder } = useData();
   const [expanded, setExpanded] = useState(true);
+  const { isDragging, isShaking } = useDragRowState('folder', folder.id);
 
   const percent = calcFolderProgressPercent(goals, steps, todos);
 
@@ -28,8 +31,13 @@ export default function FolderCard({ folder, goals, steps, todos }: Props) {
   }
 
   return (
-    <div className="folder-card">
+    <div
+      className={`folder-card${isDragging ? ' dnd-dragging' : ''}${isShaking ? ' dnd-shake' : ''}`}
+      data-drag-row="folder"
+      data-drag-id={folder.id}
+    >
       <div className="folder-card-header">
+        <DragHandle kind="folder" id={folder.id} label={`フォルダ「${folder.title}」`} />
         <button
           type="button"
           className="expand-toggle"
