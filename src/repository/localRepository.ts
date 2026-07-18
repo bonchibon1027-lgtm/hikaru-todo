@@ -234,4 +234,33 @@ export class LocalRepository implements Repository {
     this.data.todos = this.data.todos.filter((t) => t.id !== id);
     this.persist();
   }
+
+  // ---- アンドゥ用の復元(v3追加。ID保持で挿入/上書き) ----
+  async restoreFolder(folder: Folder): Promise<void> {
+    const idx = this.data.folders.findIndex((f) => f.id === folder.id);
+    if (idx === -1) this.data.folders.push({ ...folder });
+    else this.data.folders[idx] = { ...folder };
+    this.persist();
+  }
+
+  async restoreGoal(goal: Goal): Promise<void> {
+    const idx = this.data.goals.findIndex((g) => g.id === goal.id);
+    if (idx === -1) this.data.goals.push({ ...goal });
+    else this.data.goals[idx] = { ...goal };
+    this.persist();
+  }
+
+  async restoreStep(step: Step): Promise<void> {
+    const idx = this.data.steps.findIndex((s) => s.id === step.id);
+    if (idx === -1) this.data.steps.push({ ...step });
+    else this.data.steps[idx] = { ...step };
+    this.persist();
+  }
+
+  async restoreTodo(todo: Todo): Promise<void> {
+    const idx = this.data.todos.findIndex((t) => t.id === todo.id);
+    if (idx === -1) this.data.todos.push({ ...todo });
+    else this.data.todos[idx] = { ...todo };
+    this.persist();
+  }
 }

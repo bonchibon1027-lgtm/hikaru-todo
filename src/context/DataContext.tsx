@@ -1,10 +1,60 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { Folder, Goal, GoalStatus, Step, StepStatus, Todo } from '../types';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { AppData, Folder, Goal, GoalStatus, Step, StepStatus, Todo } from '../types';
 import { getRepository, isSupabaseConfigured } from '../repository';
+import type { Repository } from '../repository/types';
 import type { ImportData, ImportGoalInput } from '../utils/jsonImport';
 import { calcGoalProgressRatio, getCurrentStep } from '../utils/progress';
 import { emitCelebration } from '../utils/celebrationBus';
 import { computeNewOrder, sortByOrder } from '../utils/reorder';
+import { clearUndoStack, popUndoSnapshot, pushUndoSnapshot } from '../undo/undoStack';
+import { updateAppBadge } from '../utils/appBadge';
+
+/** 削除・D&D移動の直後に「元に戻す」トースト(v3追加)を出す */
+function notifyUndo(message: string): void {
+  emitCelebration({ type: 'undoToast', message });
+}
+
+/**
+ * アンドゥの実行(v3追加)。target(復元先スナップショット)と現在の配列を突き合わせ、
+ * targetに存在する項目はRepository経由でupsert(内容が同じならスキップ)、
+ * targetに存在しない(現在にだけある)項目は削除する。IDは保持される。
+ */
+async function reconcileEntities<T extends { id: string }>(
+  current: T[],
+  target: T[],
+  restore: (item: T) => Promise<void>,
+  remove: (id: string) => Promise<void>
+): Promise<void> {
+  const currentById = new Map(current.map((i) => [i.id, i]));
+  const targetById = new Map(target.map((i) => [i.id, i]));
+  const ops: Promise<void>[] = [];
+  for (const [id, item] of targetById) {
+    const cur = currentById.get(id);
+    if (!cur || JSON.stringify(cur) !== JSON.stringify(item)) {
+      ops.push(restore(item));
+    }
+  }
+  for (const id of currentById.keys()) {
+    if (!targetById.has(id)) {
+      ops.push(remove(id));
+    }
+  }
+  await Promise.all(ops);
+}
+
+/**
+ * スナップショットへの復元をRepository経由で一括適用する。
+ * 親→子の順(folders→goals→steps→todos)で処理することで、復元時に外部キー先が
+ * 必ず先に存在した状態になる。同じ型の中では削除/復元とも対象idが重ならないため、
+ * 1つの型の中は並行実行しても安全(folders.folder_idはon delete set null、
+ * steps/todosはon delete cascadeのため、親の削除が子に波及しても後続処理は冪等)。
+ */
+async function applyUndoToRepo(repo: Repository, current: AppData, target: AppData): Promise<void> {
+  await reconcileEntities(current.folders, target.folders, (f) => repo.restoreFolder(f), (id) => repo.deleteFolder(id));
+  await reconcileEntities(current.goals, target.goals, (g) => repo.restoreGoal(g), (id) => repo.deleteGoal(id));
+  await reconcileEntities(current.steps, target.steps, (s) => repo.restoreStep(s), (id) => repo.deleteStep(id));
+  await reconcileEntities(current.todos, target.todos, (t) => repo.restoreTodo(t), (id) => repo.deleteTodo(id));
+}
 
 /**
  * 達成演出の判定(v2追加)。完了操作のハンドラ内で、変更前後のステップ配列・Todo配列を渡して比較する。
@@ -73,6 +123,9 @@ interface DataContextValue {
 
   importData: (data: ImportData) => Promise<void>;
 
+  // ---- アンドゥ(v3追加) ----
+  undo: () => Promise<void>;
+
   // ---- ドラッグ&ドロップ(v2.1追加) ----
   moveFolder: (id: string, beforeId: string | null) => Promise<void>;
   moveGoal: (id: string, folderId: string | null, beforeId: string | null) => Promise<void>;
@@ -132,10 +185,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
   }, [repo]);
 
   // タブ復帰時の自動再取得(v2追加、Supabaseモードのみ。ローカルモードでは何もしない)
+  // v3追加: 別端末の変更と食い違うおそれがあるため、再取得のたびにアンドゥスタックをクリアする。
   useEffect(() => {
     if (!isSupabaseConfigured) return;
     function handleVisibility() {
       if (document.visibilityState === 'visible') {
+        clearUndoStack();
         void reload();
       }
     }
@@ -145,35 +200,44 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
   }, [reload]);
 
+  // アプリバッジ(v3追加)。データが変わるたびに未完了Todo数を反映する。
+  useEffect(() => {
+    updateAppBadge(steps, todos);
+  }, [steps, todos]);
+
   // ---- Folder(v1.2で追加) ----
   const addFolder = useCallback(
     async (title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const folder = await repo.createFolder({ title: trimmed });
       setFolders((prev) => [...prev, folder]);
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const renameFolder = useCallback(
     async (id: string, title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateFolder(id, { title: trimmed });
       setFolders((prev) => prev.map((f) => (f.id === id ? { ...f, title: trimmed } : f)));
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const removeFolder = useCallback(
     async (id: string) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       // 配下ゴールは削除せずトップレベルに戻す
       await repo.deleteFolder(id);
       setGoals((prev) => prev.map((g) => (g.folderId === id ? { ...g, folderId: null } : g)));
       setFolders((prev) => prev.filter((f) => f.id !== id));
+      notifyUndo('フォルダを削除しました');
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- Goal ----
@@ -181,55 +245,62 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (title: string, dueDate: string | null) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const goal = await repo.createGoal({ title: trimmed, dueDate });
       setGoals((prev) => [...prev, goal]);
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const renameGoal = useCallback(
     async (id: string, title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateGoal(id, { title: trimmed });
       setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, title: trimmed } : g)));
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const setGoalDueDate = useCallback(
     async (id: string, dueDate: string | null) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateGoal(id, { dueDate });
       setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, dueDate } : g)));
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const setGoalStatus = useCallback(
     async (id: string, status: GoalStatus) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateGoal(id, { status });
       setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, status } : g)));
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const moveGoalToFolder = useCallback(
     async (id: string, folderId: string | null) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateGoal(id, { folderId });
       setGoals((prev) => prev.map((g) => (g.id === id ? { ...g, folderId } : g)));
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const removeGoal = useCallback(
     async (id: string) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.deleteGoal(id);
       const stepIds = steps.filter((s) => s.goalId === id).map((s) => s.id);
       setTodos((prev) => prev.filter((t) => !stepIds.includes(t.stepId)));
       setSteps((prev) => prev.filter((s) => s.goalId !== id));
       setGoals((prev) => prev.filter((g) => g.id !== id));
+      notifyUndo('ゴールを削除しました');
     },
-    [repo, steps]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- Step ----
@@ -237,20 +308,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (goalId: string, title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const step = await repo.createStep({ goalId, title: trimmed });
       setSteps((prev) => [...prev, step]);
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const renameStep = useCallback(
     async (id: string, title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateStep(id, { title: trimmed });
       setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, title: trimmed } : s)));
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const setStepStatus = useCallback(
@@ -258,6 +331,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const step = steps.find((s) => s.id === id);
       const goal = step ? goals.find((g) => g.id === step.goalId) : undefined;
 
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateStep(id, { status });
       const updatedSteps = steps.map((s) => (s.id === id ? { ...s, status } : s));
       setSteps(updatedSteps);
@@ -265,16 +339,18 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // 達成演出の判定(v2追加。手動でのステップ完了時のみ「解放」を検知する)
       detectAndEmitCelebration(goal, steps, todos, updatedSteps, todos, status === 'done');
     },
-    [repo, steps, goals, todos]
+    [repo, folders, goals, steps, todos]
   );
 
   const removeStep = useCallback(
     async (id: string) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.deleteStep(id);
       setTodos((prev) => prev.filter((t) => t.stepId !== id));
       setSteps((prev) => prev.filter((s) => s.id !== id));
+      notifyUndo('ステップを削除しました');
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- Todo ----
@@ -282,20 +358,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (stepId: string, title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const todo = await repo.createTodo({ stepId, title: trimmed });
       setTodos((prev) => [...prev, todo]);
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const renameTodo = useCallback(
     async (id: string, title: string) => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateTodo(id, { title: trimmed });
       setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, title: trimmed } : t)));
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   const toggleTodo = useCallback(
@@ -308,6 +386,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const step = steps.find((s) => s.id === target.stepId);
       const goal = step ? goals.find((g) => g.id === step.goalId) : undefined;
 
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.updateTodo(id, { done, completedAt });
       const updatedTodos = todos.map((t) => (t.id === id ? { ...t, done, completedAt } : t));
       setTodos(updatedTodos);
@@ -328,15 +407,17 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // 達成演出の判定(v2追加。完了方向の操作の時だけ「次ステップ解放」を検知する)
       detectAndEmitCelebration(goal, steps, todos, updatedSteps, updatedTodos, done);
     },
-    [repo, todos, steps, goals]
+    [repo, folders, goals, steps, todos]
   );
 
   const removeTodo = useCallback(
     async (id: string) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       await repo.deleteTodo(id);
       setTodos((prev) => prev.filter((t) => t.id !== id));
+      notifyUndo('Todoを削除しました');
     },
-    [repo]
+    [repo, folders, goals, steps, todos]
   );
 
   // ==================== ドラッグ&ドロップ(v2.1追加) ====================
@@ -350,6 +431,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (id: string, beforeId: string | null) => {
       const moved = folders.find((f) => f.id === id);
       if (!moved) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const others = sortByOrder(folders.filter((f) => f.id !== id));
       const newOrder = computeNewOrder(others, moved, beforeId);
       const idToSort = new Map(newOrder.map((f, idx) => [f.id, idx]));
@@ -367,8 +449,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
           return sortOrder !== undefined && sortOrder !== f.sortOrder ? { ...f, sortOrder } : f;
         })
       );
+      notifyUndo('移動しました');
     },
-    [repo, folders]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- ゴールの並び替え・フォルダ所属変更・昇格/降格の着地先 ----
@@ -376,6 +459,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (id: string, folderId: string | null, beforeId: string | null) => {
       const moved = goals.find((g) => g.id === id);
       if (!moved) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const others = sortByOrder(goals.filter((g) => g.folderId === folderId && g.id !== id));
       const movedForOrder = { ...moved, folderId };
       const newOrder = computeNewOrder(others, movedForOrder, beforeId);
@@ -400,8 +484,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
           return sortOrder !== g.sortOrder ? { ...g, sortOrder } : g;
         })
       );
+      notifyUndo('移動しました');
     },
-    [repo, goals]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- ステップの並び替え・ゴール間移動 ----
@@ -409,6 +494,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (id: string, goalId: string, beforeId: string | null) => {
       const moved = steps.find((s) => s.id === id);
       if (!moved) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const others = sortByOrder(steps.filter((s) => s.goalId === goalId && s.id !== id));
       const movedForOrder = { ...moved, goalId };
       const newOrder = computeNewOrder(others, movedForOrder, beforeId);
@@ -433,8 +519,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
           return sortOrder !== s.sortOrder ? { ...s, sortOrder } : s;
         })
       );
+      notifyUndo('移動しました');
     },
-    [repo, steps]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- Todoの並び替え・ステップ間移動 ----
@@ -442,6 +529,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     async (id: string, stepId: string, beforeId: string | null) => {
       const moved = todos.find((t) => t.id === id);
       if (!moved) return;
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const others = sortByOrder(todos.filter((t) => t.stepId === stepId && t.id !== id));
       const movedForOrder = { ...moved, stepId };
       const newOrder = computeNewOrder(others, movedForOrder, beforeId);
@@ -466,8 +554,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
           return sortOrder !== t.sortOrder ? { ...t, sortOrder } : t;
         })
       );
+      notifyUndo('移動しました');
     },
-    [repo, todos]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- Todo→左: 同ゴール内で新しいステップに昇格(タイトル引継ぎ、元ステップの直後に挿入) ----
@@ -479,6 +568,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!originalStep) return;
       const goalId = originalStep.goalId;
 
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const newStep = await repo.createStep({ goalId, title: todo.title });
 
       const sorted = sortByOrder(steps.filter((s) => s.goalId === goalId));
@@ -507,8 +597,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return [...renumbered, finalNewStep];
       });
       setTodos((prev) => prev.filter((t) => t.id !== todoId));
+      notifyUndo('昇格しました');
     },
-    [repo, todos, steps]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- ステップ→右: 直前のステップのTodoに降格(タイトル引継ぎ、配下Todoも同じStepへ順序維持で移動) ----
@@ -518,6 +609,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       const targetStep = steps.find((s) => s.id === targetStepId);
       if (!step || !targetStep) return;
 
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const childTodos = sortByOrder(todos.filter((t) => t.stepId === stepId));
       const existingTargetTodos = sortByOrder(todos.filter((t) => t.stepId === targetStepId));
 
@@ -554,8 +646,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         return [...updated, finalTitleTodo];
       });
       setSteps((prev) => prev.filter((s) => s.id !== stepId));
+      notifyUndo('降格しました');
     },
-    [repo, steps, todos]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- ステップ→左: ゴールに昇格(タイトル引継ぎ、元ゴールの直後に挿入、配下Todoは「その他」ステップへ) ----
@@ -567,6 +660,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (!goal) return;
       const folderId = goal.folderId;
 
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const newGoal = await repo.createGoal({ title: step.title, dueDate: null, folderId });
 
       const sortedGoals = sortByOrder(goals.filter((g) => g.folderId === folderId));
@@ -616,8 +710,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       } else {
         setSteps((prev) => prev.filter((s) => s.id !== stepId));
       }
+      notifyUndo('ゴールに昇格しました');
     },
-    [repo, steps, goals, todos]
+    [repo, folders, goals, steps, todos]
   );
 
   // ---- JSONインポート(v1.1で追加、v1.2でフォルダ対応) ----
@@ -625,6 +720,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // 配列順に呼び出すことで、sortOrderは既存データの続きから割り振られる。
   const importData = useCallback(
     async (data: ImportData) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
       const newFolders: Folder[] = [];
       const newGoals: Goal[] = [];
       const newSteps: Step[] = [];
@@ -679,8 +775,47 @@ export function DataProvider({ children }: { children: ReactNode }) {
       setSteps((prev) => [...prev, ...newSteps]);
       setTodos((prev) => [...prev, ...newTodos]);
     },
-    [repo, folders]
+    [repo, folders, goals, steps, todos]
   );
+
+  // ---- アンドゥ(v3追加) ----
+  // undoStack(モジュール外部の状態)から直近のスナップショットを取り出し、Repository経由で差分適用してstateを復元する。
+  // 実行中に他の操作が割り込むと不整合が起きうるため、簡易的な多重実行ガードを設ける。
+  const undoingRef = useRef(false);
+  const undo = useCallback(async () => {
+    if (undoingRef.current) return;
+    const entry = popUndoSnapshot();
+    if (!entry) return;
+    undoingRef.current = true;
+    try {
+      const current: AppData = { folders, goals, steps, todos };
+      const target = entry.snapshot;
+      await applyUndoToRepo(repo, current, target);
+      setFolders(target.folders);
+      setGoals(target.goals);
+      setSteps(target.steps);
+      setTodos(target.todos);
+    } catch (e) {
+      console.error('[undo] 復元に失敗しました', e);
+    } finally {
+      undoingRef.current = false;
+    }
+  }, [repo, folders, goals, steps, todos, undoingRef]);
+
+  // Ctrl+Z / Cmd+Z でアンドゥを実行する(v3追加)。input/textarea/contentEditableにフォーカス中は無視する。
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey) return;
+      if (e.key.toLowerCase() !== 'z') return;
+      const active = document.activeElement as HTMLElement | null;
+      const tag = active?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || active?.isContentEditable) return;
+      e.preventDefault();
+      void undo();
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo]);
 
   const value: DataContextValue = {
     folders,
@@ -708,6 +843,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     toggleTodo,
     removeTodo,
     importData,
+    undo,
     moveFolder,
     moveGoal,
     moveStep,

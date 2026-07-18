@@ -5,7 +5,9 @@
 
 export type CelebrationEvent =
   | { type: 'goalComplete' }
-  | { type: 'stepUnlock'; stepNumber: number; stepTitle: string };
+  | { type: 'stepUnlock'; stepNumber: number; stepTitle: string }
+  // 削除・D&D移動の直後に出す「元に戻す」トースト(v3追加)。実際のundo実行はCelebrationLayer側でDataContextを呼ぶ。
+  | { type: 'undoToast'; message: string };
 
 type Listener = (event: CelebrationEvent) => void;
 

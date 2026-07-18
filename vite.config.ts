@@ -31,6 +31,21 @@ export default defineConfig({
         start_url: base,
         scope: base,
         lang: 'ja',
+        // ウィジェットショートカット(v3追加)。Android: アイコン長押し→「今日のやること」。
+        // baseとの整合のためURLは相対("./?widget=1")で指定する(manifestのscope基準で解決される)。
+        shortcuts: [
+          {
+            name: '今日のやること',
+            url: './?widget=1',
+            icons: [
+              {
+                src: `${base}icons/icon-192.png`,
+                sizes: '192x192',
+                type: 'image/png',
+              },
+            ],
+          },
+        ],
         icons: [
           {
             src: `${base}icons/icon-192.png`,

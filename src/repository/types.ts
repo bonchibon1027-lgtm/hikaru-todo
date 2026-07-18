@@ -28,4 +28,12 @@ export interface Repository {
     patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId'>>
   ): Promise<void>;
   deleteTodo(id: string): Promise<void>;
+
+  // ---- アンドゥ用の復元(v3追加) ----
+  // 指定したIDのまま挿入(存在しなければ作成、存在すれば全フィールドを上書き)する。
+  // undoStack.ts のスナップショットをRepository経由で復元するために使う(ID保持のため通常のcreateXは使えない)。
+  restoreFolder(folder: Folder): Promise<void>;
+  restoreGoal(goal: Goal): Promise<void>;
+  restoreStep(step: Step): Promise<void>;
+  restoreTodo(todo: Todo): Promise<void>;
 }

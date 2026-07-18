@@ -251,4 +251,58 @@ export class SupabaseRepository implements Repository {
     const { error } = await db.from('todos').delete().eq('id', id);
     if (error) throw error;
   }
+
+  // ---- アンドゥ用の復元(v3追加。ID保持でupsert = 存在すれば全フィールド上書き、無ければ挿入) ----
+  // user_id は列側の default auth.uid() に任せる(挿入時のみ適用。更新時は既存値のまま変わらない)。
+  async restoreFolder(folder: Folder): Promise<void> {
+    const db = client();
+    const { error } = await db.from('folders').upsert({
+      id: folder.id,
+      title: folder.title,
+      sort_order: folder.sortOrder,
+      created_at: folder.createdAt,
+    });
+    if (error) throw error;
+  }
+
+  async restoreGoal(goal: Goal): Promise<void> {
+    const db = client();
+    const { error } = await db.from('goals').upsert({
+      id: goal.id,
+      folder_id: goal.folderId,
+      title: goal.title,
+      sort_order: goal.sortOrder,
+      status: goal.status,
+      due_date: goal.dueDate,
+      created_at: goal.createdAt,
+    });
+    if (error) throw error;
+  }
+
+  async restoreStep(step: Step): Promise<void> {
+    const db = client();
+    const { error } = await db.from('steps').upsert({
+      id: step.id,
+      goal_id: step.goalId,
+      title: step.title,
+      sort_order: step.sortOrder,
+      status: step.status,
+      created_at: step.createdAt,
+    });
+    if (error) throw error;
+  }
+
+  async restoreTodo(todo: Todo): Promise<void> {
+    const db = client();
+    const { error } = await db.from('todos').upsert({
+      id: todo.id,
+      step_id: todo.stepId,
+      title: todo.title,
+      done: todo.done,
+      sort_order: todo.sortOrder,
+      created_at: todo.createdAt,
+      completed_at: todo.completedAt,
+    });
+    if (error) throw error;
+  }
 }

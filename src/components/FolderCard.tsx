@@ -5,6 +5,7 @@ import ProgressBar from './ProgressBar';
 import InlineText from './InlineText';
 import GoalCard from './GoalCard';
 import DragHandle from './DragHandle';
+import ConfirmDeleteButton from './ConfirmDeleteButton';
 import { useData } from '../context/DataContext';
 import { useDragRowState } from '../dnd/DragContext';
 
@@ -21,14 +22,6 @@ export default function FolderCard({ folder, goals, steps, todos }: Props) {
   const { isDragging, isShaking } = useDragRowState('folder', folder.id);
 
   const percent = calcFolderProgressPercent(goals, steps, todos);
-
-  function handleDelete() {
-    const ok = window.confirm(
-      `フォルダ「${folder.title}」を削除しますか?\n中のゴールは削除されず、トップレベルに戻ります。`
-    );
-    if (!ok) return;
-    removeFolder(folder.id);
-  }
 
   return (
     <div
@@ -50,9 +43,7 @@ export default function FolderCard({ folder, goals, steps, todos }: Props) {
           <span className="folder-icon" aria-hidden="true">📁</span>
           <InlineText value={folder.title} onChange={(t) => renameFolder(folder.id, t)} className="folder-title" />
         </div>
-        <button type="button" className="row-delete-button" onClick={handleDelete} aria-label="フォルダを削除">
-          ×
-        </button>
+        <ConfirmDeleteButton onDelete={() => removeFolder(folder.id)} label="フォルダを削除" />
       </div>
 
       <div className="folder-progress-row">

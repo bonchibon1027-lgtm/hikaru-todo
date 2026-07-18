@@ -5,11 +5,17 @@ import AuthGate from './auth/AuthGate';
 import TabBar, { type ViewKey } from './components/TabBar';
 import TreeView from './views/TreeView';
 import TodoView from './views/TodoView';
+import RecordsView from './views/RecordsView';
+import WidgetView from './views/WidgetView';
 import StreakBadge from './components/StreakBadge';
 import SoundToggle from './components/SoundToggle';
 import CelebrationLayer from './components/CelebrationLayer';
 import MigrationBanner from './components/MigrationBanner';
 import { calcStreak } from './utils/streak';
+
+// ウィジェットモード判定(v3追加)。`?widget=1` で起動された場合はWidgetViewのみを描画する。
+const isWidgetMode =
+  typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('widget') === '1';
 
 function getInitialView(): ViewKey {
   if (typeof window === 'undefined') return 'todo';
@@ -57,7 +63,7 @@ function AppShell() {
       </header>
       <main className="app-main">
         <MigrationBanner />
-        {view === 'tree' ? <TreeView /> : <TodoView />}
+        {view === 'tree' ? <TreeView /> : view === 'records' ? <RecordsView /> : <TodoView />}
       </main>
       <TabBar active={view} onChange={setView} />
       <CelebrationLayer />
@@ -66,6 +72,18 @@ function AppShell() {
 }
 
 function App() {
+  // ウィジェットモード(v3追加): タブバー・FAB・インポート・演出なしの超軽量表示。
+  // Supabaseモードでは未ログイン時に既存のログイン画面が出る(AuthGateをそのまま通す)。
+  if (isWidgetMode) {
+    return (
+      <AuthGate>
+        <DataProvider>
+          <WidgetView />
+        </DataProvider>
+      </AuthGate>
+    );
+  }
+
   return (
     <AuthGate>
       <DataProvider>

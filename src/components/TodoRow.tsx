@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Todo } from '../types';
 import InlineText from './InlineText';
 import DragHandle from './DragHandle';
+import ConfirmDeleteButton from './ConfirmDeleteButton';
 import { triggerClickFeel } from '../utils/clickFeel';
 import { loadUiPrefs } from '../utils/uiPrefs';
 import { useDragRowState } from '../dnd/DragContext';
@@ -55,9 +56,7 @@ export default function TodoRow({ todo, onToggle, onRename, onDelete, meta, drag
         <InlineText value={todo.title} onChange={onRename} className="todo-title" />
         {meta && <div className="todo-meta">{meta}</div>}
       </div>
-      <button type="button" className="row-delete-button" onClick={onDelete} aria-label="削除">
-        ×
-      </button>
+      <ConfirmDeleteButton onDelete={onDelete} label="削除" />
     </div>
   );
 }

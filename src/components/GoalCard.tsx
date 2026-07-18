@@ -8,6 +8,7 @@ import AddInlineForm from './AddInlineForm';
 import DragHandle from './DragHandle';
 import { useData } from '../context/DataContext';
 import { useDragRowState } from '../dnd/DragContext';
+import { useConfirmDelete } from '../hooks/useConfirmDelete';
 
 interface Props {
   goal: Goal;
@@ -22,6 +23,14 @@ export default function GoalCard({ goal, steps, todos }: Props) {
   const [folderSubmenu, setFolderSubmenu] = useState(false);
   const [editingDue, setEditingDue] = useState(false);
   const { isDragging, isShaking } = useDragRowState('goal', goal.id);
+  const {
+    armed: deleteArmed,
+    trigger: triggerDelete,
+    onPointerDown: onDeletePointerDown,
+  } = useConfirmDelete(() => {
+    removeGoal(goal.id);
+    closeMenu();
+  });
 
   const percent = calcGoalProgressPercent(steps, todos);
   const dueLabel = formatDueLabel(goal.dueDate);
@@ -83,8 +92,12 @@ export default function GoalCard({ goal, steps, todos }: Props) {
                   )}
                   <button onClick={() => { setEditingDue(true); closeMenu(); }}>期限を変更</button>
                   <button onClick={() => setFolderSubmenu(true)}>フォルダへ移動</button>
-                  <button className="menu-danger" onClick={() => { removeGoal(goal.id); closeMenu(); }}>
-                    削除
+                  <button
+                    className={`menu-danger${deleteArmed ? ' menu-danger--confirm' : ''}`}
+                    onClick={triggerDelete}
+                    onPointerDown={onDeletePointerDown}
+                  >
+                    {deleteArmed ? 'もう一度押すと削除' : '削除'}
                   </button>
                 </>
               ) : (

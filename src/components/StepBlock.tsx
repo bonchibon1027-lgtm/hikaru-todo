@@ -5,6 +5,7 @@ import InlineText from './InlineText';
 import TodoRow from './TodoRow';
 import AddInlineForm from './AddInlineForm';
 import DragHandle from './DragHandle';
+import ConfirmDeleteButton from './ConfirmDeleteButton';
 import { useData } from '../context/DataContext';
 import { triggerClickFeel } from '../utils/clickFeel';
 import { loadUiPrefs } from '../utils/uiPrefs';
@@ -80,17 +81,9 @@ export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props)
         <span className="step-progress-mini">
           {done}/{total || 0}
         </span>
-        <button
-          type="button"
-          className="row-delete-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            removeStep(step.id);
-          }}
-          aria-label="ステップを削除"
-        >
-          ×
-        </button>
+        <span onClick={(e) => e.stopPropagation()}>
+          <ConfirmDeleteButton onDelete={() => removeStep(step.id)} label="ステップを削除" />
+        </span>
         <span className={`chevron${expanded ? ' chevron--open' : ''}`}>›</span>
       </div>
 
