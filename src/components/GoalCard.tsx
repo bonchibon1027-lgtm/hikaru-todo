@@ -19,7 +19,7 @@ interface Props {
 
 export default function GoalCard({ goal, steps, todos }: Props) {
   const { folders, renameGoal, removeGoal, setGoalStatus, setGoalDueDate, moveGoalToFolder, addStep } = useData();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(steps.length === 0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [folderSubmenu, setFolderSubmenu] = useState(false);
   const [editingDue, setEditingDue] = useState(false);

@@ -18,7 +18,7 @@ interface Props {
 
 export default function FolderCard({ folder, goals, steps, todos }: Props) {
   const { renameFolder, removeFolder } = useData();
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(goals.length === 0);
   const { isDragging, isShaking } = useDragRowState('folder', folder.id);
 
   const percent = calcFolderProgressPercent(goals, steps, todos);
