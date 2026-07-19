@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useData } from '../context/DataContext';
 import TodoRow from '../components/TodoRow';
-import { getCurrentStep } from '../utils/progress';
+import { compareTodoDueOrder, getCurrentStep } from '../utils/progress';
 import { loadUiPrefs, saveUiPrefs } from '../utils/uiPrefs';
 
 export default function TodoView() {
-  const { goals, steps, todos, loading, toggleTodo, renameTodo, removeTodo } = useData();
+  const { goals, steps, todos, loading, toggleTodo, renameTodo, removeTodo, setTodoDueDate } = useData();
   const [showAll, setShowAll] = useState(() => loadUiPrefs().showAllTodos);
 
   function handleToggleShowAll() {
@@ -35,7 +35,7 @@ export default function TodoView() {
       if (showAll) return true;
       return currentStepIdByGoal.get(step.goalId) === step.id;
     })
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort(compareTodoDueOrder);
 
   const goalById = new Map(goals.map((g) => [g.id, g]));
 
@@ -71,6 +71,7 @@ export default function TodoView() {
               onToggle={() => toggleTodo(todo.id)}
               onRename={(title) => renameTodo(todo.id, title)}
               onDelete={() => removeTodo(todo.id)}
+              onDueDateChange={(d) => setTodoDueDate(todo.id, d)}
             />
           );
         })}

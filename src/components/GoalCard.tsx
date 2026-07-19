@@ -6,6 +6,7 @@ import InlineText from './InlineText';
 import StepBlock from './StepBlock';
 import AddInlineForm from './AddInlineForm';
 import DragHandle from './DragHandle';
+import DueDateEditor from './DueDateEditor';
 import { useData } from '../context/DataContext';
 import { useDragRowState } from '../dnd/DragContext';
 import { useConfirmDelete } from '../hooks/useConfirmDelete';
@@ -157,52 +158,6 @@ export default function GoalCard({ goal, steps, todos }: Props) {
           <AddInlineForm placeholder="ステップを追加" onAdd={(title) => addStep(goal.id, title)} />
         </div>
       )}
-    </div>
-  );
-}
-
-function DueDateEditor({
-  value,
-  onSave,
-  onCancel,
-}: {
-  value: string | null;
-  onSave: (value: string | null) => void;
-  onCancel: () => void;
-}) {
-  const [noDue, setNoDue] = useState(value === null);
-  const [date, setDate] = useState(value ?? '');
-
-  return (
-    <div className="due-editor">
-      <label className="due-editor-option">
-        <input
-          type="checkbox"
-          checked={noDue}
-          onChange={(e) => setNoDue(e.target.checked)}
-        />
-        無期限
-      </label>
-      {!noDue && (
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="due-editor-date"
-        />
-      )}
-      <div className="due-editor-actions">
-        <button
-          type="button"
-          className="primary-button primary-button--small"
-          onClick={() => onSave(noDue ? null : date || null)}
-        >
-          保存
-        </button>
-        <button type="button" className="link-button" onClick={onCancel}>
-          キャンセル
-        </button>
-      </div>
     </div>
   );
 }

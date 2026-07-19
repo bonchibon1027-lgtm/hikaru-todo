@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext';
 import { isSupabaseConfigured } from '../repository';
-import { getCurrentStep } from '../utils/progress';
+import { compareTodoDueOrder, getCurrentStep } from '../utils/progress';
 import { triggerClickFeel } from '../utils/clickFeel';
 import { loadUiPrefs } from '../utils/uiPrefs';
 
@@ -44,7 +44,7 @@ export default function WidgetView() {
         if (!step || step.status === 'done' || !activeGoalIds.has(step.goalId)) return false;
         return currentStepIdByGoal.get(step.goalId) === step.id;
       })
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      .sort(compareTodoDueOrder);
   }, [goals, steps, todos]);
 
   function handleToggle(id: string) {

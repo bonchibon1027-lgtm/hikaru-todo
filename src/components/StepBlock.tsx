@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Step, Todo } from '../types';
-import { calcTodoProgress, calcStepProgressPercent } from '../utils/progress';
+import { calcTodoProgress, calcStepProgressPercent, formatDueChip } from '../utils/progress';
 import InlineText from './InlineText';
 import TodoRow from './TodoRow';
 import AddInlineForm from './AddInlineForm';
 import DragHandle from './DragHandle';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
+import DueDateEditor from './DueDateEditor';
 import { useData } from '../context/DataContext';
 import { triggerClickFeel } from '../utils/clickFeel';
 import { loadUiPrefs } from '../utils/uiPrefs';
@@ -20,16 +21,28 @@ interface Props {
 }
 
 export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props) {
-  const { renameStep, removeStep, addTodo, renameTodo, toggleTodo, removeTodo, setStepStatus } = useData();
+  const {
+    renameStep,
+    removeStep,
+    addTodo,
+    renameTodo,
+    toggleTodo,
+    removeTodo,
+    setStepStatus,
+    setStepDueDate,
+    setTodoDueDate,
+  } = useData();
   const { done, total } = calcTodoProgress(todos);
   const percent = calcStepProgressPercent(step, todos);
   const isDone = step.status === 'done';
   // 完了ステップは折りたたみ、現在のステップは展開、それより先の未来ステップは折りたたみがデフォルト
   const [expanded, setExpanded] = useState(!isDone && isCurrent);
   const [pressed, setPressed] = useState(false);
+  const [editingDue, setEditingDue] = useState(false);
   const prevIsDone = useRef(isDone);
   const prevIsCurrent = useRef(isCurrent);
   const { isDragging, isShaking } = useDragRowState('step', step.id);
+  const dueChip = formatDueChip(step.dueDate);
 
   useEffect(() => {
     if (isDone && !prevIsDone.current) {
@@ -78,6 +91,24 @@ export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props)
         <div className="step-title-wrap" onClick={(e) => e.stopPropagation()}>
           <InlineText value={step.title} onChange={(t) => renameStep(step.id, t)} className="step-title" />
         </div>
+        {dueChip && (
+          <span
+            className={`due-chip${isDone ? ' due-chip--muted' : dueChip.overdue ? ' due-chip--overdue' : ''}`}
+          >
+            {dueChip.text}
+          </span>
+        )}
+        <button
+          type="button"
+          className="due-icon-button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingDue((v) => !v);
+          }}
+          aria-label="ステップの期限を設定"
+        >
+          📅
+        </button>
         <span className="step-progress-mini">
           {done}/{total || 0}
         </span>
@@ -86,6 +117,19 @@ export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props)
         </span>
         <span className={`chevron${expanded ? ' chevron--open' : ''}`}>›</span>
       </div>
+
+      {editingDue && (
+        <div className="step-due-editor-wrap">
+          <DueDateEditor
+            value={step.dueDate}
+            onSave={(v) => {
+              setStepDueDate(step.id, v);
+              setEditingDue(false);
+            }}
+            onCancel={() => setEditingDue(false)}
+          />
+        </div>
+      )}
 
       {expanded && (
         <div className="step-body">
@@ -105,6 +149,7 @@ export default function StepBlock({ step, stepNumber, todos, isCurrent }: Props)
                 onToggle={() => toggleTodo(todo.id)}
                 onRename={(title) => renameTodo(todo.id, title)}
                 onDelete={() => removeTodo(todo.id)}
+                onDueDateChange={(d) => setTodoDueDate(todo.id, d)}
               />
             ))}
           </div>

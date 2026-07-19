@@ -402,6 +402,66 @@
   font-size: 0.85rem;
 }
 
+/* ---------- ステップ・Todoの期限チップ&アイコン(v3.1追加) ---------- */
+.due-chip {
+  font-size: 0.68rem;
+  color: var(--color-mint);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.due-chip--overdue {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+/* 完了済み行の期限チップは薄いグレー(赤くしない・SPEC.md準拠) */
+.due-chip--muted {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+/* ホバー/タップで見つけられる程度の控えめさ(常時表示・低コントラスト) */
+.due-icon-button {
+  position: relative;
+  background: none;
+  border: none;
+  color: #4a4a4a;
+  font-size: 0.82rem;
+  line-height: 1;
+  padding: 4px;
+  flex-shrink: 0;
+  filter: grayscale(1);
+  opacity: 0.7;
+  transition: color 0.15s ease, opacity 0.15s ease, filter 0.15s ease;
+}
+
+.due-icon-button:hover {
+  color: var(--color-mint);
+  opacity: 1;
+  filter: none;
+}
+
+/* タップ領域を44px以上に拡張(見た目のサイズは変えない) */
+.due-icon-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+}
+
+.step-due-editor-wrap {
+  margin-top: 8px;
+}
+
+/* Todo行内でのインライン期限エディタ。todo-rowをflex-wrapさせ、行幅いっぱいの2段目として表示する */
+.todo-due-editor-inline {
+  flex-basis: 100%;
+}
+
 /* ---------- ステップ ---------- */
 .step-block {
   background: var(--color-surface-raised);
@@ -508,6 +568,7 @@
 /* ---------- Todo行 ---------- */
 .todo-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 8px 0;

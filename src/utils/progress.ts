@@ -97,3 +97,40 @@ export function formatDueLabel(dueDate: string | null): { text: string; overdue:
   }
   return { text: `残り${diff}日`, overdue: false };
 }
+
+/**
+ * ステップ・Todoの期限チップ表示(v3.1追加)。上のdaysUntil()を共通利用し、
+ * 「今日」「明日」「残りn日」「n日超過」を返す(無期限はnull)。
+ * done行の薄いグレー表示はUI側(呼び出し元)でoverdueを無視して上書きする。
+ */
+export function formatDueChip(dueDate: string | null): { text: string; overdue: boolean } | null {
+  if (!dueDate) return null;
+  const diff = daysUntil(dueDate);
+  if (diff < 0) {
+    return { text: `${Math.abs(diff)}日超過`, overdue: true };
+  }
+  if (diff === 0) {
+    return { text: '今日', overdue: false };
+  }
+  if (diff === 1) {
+    return { text: '明日', overdue: false };
+  }
+  return { text: `残り${diff}日`, overdue: false };
+}
+
+/**
+ * Todoビュー/ウィジェットの並び順(v3.1追加・SPEC.md準拠)。
+ * dueDateあり昇順(期限切れ→今日→近い順)、dueDateなしは作成順で最後。同日内は作成順。
+ * ツリービュー内(StepBlock配下)の並びは対象外(従来通りsortOrder/D&D)。
+ */
+export function compareTodoDueOrder(
+  a: Pick<Todo, 'dueDate' | 'createdAt'>,
+  b: Pick<Todo, 'dueDate' | 'createdAt'>
+): number {
+  if (a.dueDate !== b.dueDate) {
+    if (a.dueDate === null) return 1;
+    if (b.dueDate === null) return -1;
+    return a.dueDate < b.dueDate ? -1 : 1;
+  }
+  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+}

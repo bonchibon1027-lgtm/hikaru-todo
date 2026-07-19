@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { Step, Todo } from '../types';
 import { useData } from '../context/DataContext';
 import { getRepository, isSupabaseConfigured } from '../repository';
 import { readLocalSnapshot, hasLocalData } from '../repository/localRepository';
@@ -57,8 +58,11 @@ export default function MigrationBanner() {
         const mappedGoalId = goalIdMap.get(step.goalId);
         if (!mappedGoalId) continue;
         const created = await repo.createStep({ goalId: mappedGoalId, title: step.title });
-        if (step.status !== 'active') {
-          await repo.updateStep(created.id, { status: step.status });
+        const stepPatch: Partial<Pick<Step, 'status' | 'dueDate'>> = {};
+        if (step.status !== 'active') stepPatch.status = step.status;
+        if (step.dueDate != null) stepPatch.dueDate = step.dueDate;
+        if (Object.keys(stepPatch).length > 0) {
+          await repo.updateStep(created.id, stepPatch);
         }
         stepIdMap.set(step.id, created.id);
       }
@@ -67,8 +71,14 @@ export default function MigrationBanner() {
         const mappedStepId = stepIdMap.get(todo.stepId);
         if (!mappedStepId) continue;
         const created = await repo.createTodo({ stepId: mappedStepId, title: todo.title });
+        const todoPatch: Partial<Pick<Todo, 'done' | 'completedAt' | 'dueDate'>> = {};
         if (todo.done) {
-          await repo.updateTodo(created.id, { done: true, completedAt: todo.completedAt ?? new Date().toISOString() });
+          todoPatch.done = true;
+          todoPatch.completedAt = todo.completedAt ?? new Date().toISOString();
+        }
+        if (todo.dueDate != null) todoPatch.dueDate = todo.dueDate;
+        if (Object.keys(todoPatch).length > 0) {
+          await repo.updateTodo(created.id, todoPatch);
         }
       }
 

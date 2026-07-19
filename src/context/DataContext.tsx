@@ -114,11 +114,13 @@ interface DataContextValue {
   addStep: (goalId: string, title: string) => Promise<void>;
   renameStep: (id: string, title: string) => Promise<void>;
   setStepStatus: (id: string, status: StepStatus) => Promise<void>;
+  setStepDueDate: (id: string, dueDate: string | null) => Promise<void>;
   removeStep: (id: string) => Promise<void>;
 
   addTodo: (stepId: string, title: string) => Promise<void>;
   renameTodo: (id: string, title: string) => Promise<void>;
   toggleTodo: (id: string) => Promise<void>;
+  setTodoDueDate: (id: string, dueDate: string | null) => Promise<void>;
   removeTodo: (id: string) => Promise<void>;
 
   importData: (data: ImportData) => Promise<void>;
@@ -342,6 +344,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [repo, folders, goals, steps, todos]
   );
 
+  // v3.1追加: ステップの期限設定・変更・「無期限」クリア
+  const setStepDueDate = useCallback(
+    async (id: string, dueDate: string | null) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
+      await repo.updateStep(id, { dueDate });
+      setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, dueDate } : s)));
+    },
+    [repo, folders, goals, steps, todos]
+  );
+
   const removeStep = useCallback(
     async (id: string) => {
       pushUndoSnapshot({ folders, goals, steps, todos });
@@ -406,6 +418,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
       // 達成演出の判定(v2追加。完了方向の操作の時だけ「次ステップ解放」を検知する)
       detectAndEmitCelebration(goal, steps, todos, updatedSteps, updatedTodos, done);
+    },
+    [repo, folders, goals, steps, todos]
+  );
+
+  // v3.1追加: Todoの期限設定・変更・「無期限」クリア
+  const setTodoDueDate = useCallback(
+    async (id: string, dueDate: string | null) => {
+      pushUndoSnapshot({ folders, goals, steps, todos });
+      await repo.updateTodo(id, { dueDate });
+      setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, dueDate } : t)));
     },
     [repo, folders, goals, steps, todos]
   );
@@ -732,22 +754,32 @@ export function DataProvider({ children }: { children: ReactNode }) {
 
         for (const stepInput of goalInput.steps) {
           const step = await repo.createStep({ goalId: goal.id, title: stepInput.title });
-          let finalStep = step;
           // v2追加: エクスポートJSONのstatus("done")を受理し、完了状態を復元する
-          if (stepInput.status === 'done') {
-            await repo.updateStep(step.id, { status: 'done' });
-            finalStep = { ...step, status: 'done' };
+          // v3.1追加: dueDateも同様に受理する
+          const stepPatch: Partial<Pick<Step, 'status' | 'dueDate'>> = {};
+          if (stepInput.status === 'done') stepPatch.status = 'done';
+          if (stepInput.dueDate !== null) stepPatch.dueDate = stepInput.dueDate;
+          let finalStep = step;
+          if (Object.keys(stepPatch).length > 0) {
+            await repo.updateStep(step.id, stepPatch);
+            finalStep = { ...step, ...stepPatch };
           }
           newSteps.push(finalStep);
 
           for (const todoInput of stepInput.todos) {
             const todo = await repo.createTodo({ stepId: step.id, title: todoInput.title });
-            let finalTodo = todo;
             // v2追加: エクスポートJSONのdone(true)を受理し、completedAt=現在時刻で復元する
+            // v3.1追加: dueDateも同様に受理する
+            const todoPatch: Partial<Pick<Todo, 'done' | 'completedAt' | 'dueDate'>> = {};
             if (todoInput.done) {
-              const completedAt = new Date().toISOString();
-              await repo.updateTodo(todo.id, { done: true, completedAt });
-              finalTodo = { ...todo, done: true, completedAt };
+              todoPatch.done = true;
+              todoPatch.completedAt = new Date().toISOString();
+            }
+            if (todoInput.dueDate !== null) todoPatch.dueDate = todoInput.dueDate;
+            let finalTodo = todo;
+            if (Object.keys(todoPatch).length > 0) {
+              await repo.updateTodo(todo.id, todoPatch);
+              finalTodo = { ...todo, ...todoPatch };
             }
             newTodos.push(finalTodo);
           }
@@ -837,10 +869,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
     addStep,
     renameStep,
     setStepStatus,
+    setStepDueDate,
     removeStep,
     addTodo,
     renameTodo,
     toggleTodo,
+    setTodoDueDate,
     removeTodo,
     importData,
     undo,

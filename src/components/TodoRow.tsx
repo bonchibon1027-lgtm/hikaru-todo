@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import type { Todo } from '../types';
+import { formatDueChip } from '../utils/progress';
 import InlineText from './InlineText';
 import DragHandle from './DragHandle';
 import ConfirmDeleteButton from './ConfirmDeleteButton';
+import DueDateEditor from './DueDateEditor';
 import { triggerClickFeel } from '../utils/clickFeel';
 import { loadUiPrefs } from '../utils/uiPrefs';
 import { useDragRowState } from '../dnd/DragContext';
@@ -12,15 +14,27 @@ interface Props {
   onToggle: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
+  /** v3.1追加。期限の設定・変更・「無期限」クリア */
+  onDueDateChange: (dueDate: string | null) => void;
   meta?: string; // 「ゴール名 › ステップ名」など
   /** ツリービュー(StepBlock配下)でのみtrue。Todoビューではドラッグ&ドロップ非対応のため付けない */
   draggable?: boolean;
 }
 
-export default function TodoRow({ todo, onToggle, onRename, onDelete, meta, draggable = false }: Props) {
+export default function TodoRow({
+  todo,
+  onToggle,
+  onRename,
+  onDelete,
+  onDueDateChange,
+  meta,
+  draggable = false,
+}: Props) {
   const [justCompleted, setJustCompleted] = useState(false);
   const [pressed, setPressed] = useState(false);
+  const [editingDue, setEditingDue] = useState(false);
   const { isDragging, isShaking } = useDragRowState('todo', todo.id);
+  const dueChip = formatDueChip(todo.dueDate);
 
   function handleToggle() {
     setPressed(true);
@@ -56,7 +70,32 @@ export default function TodoRow({ todo, onToggle, onRename, onDelete, meta, drag
         <InlineText value={todo.title} onChange={onRename} className="todo-title" />
         {meta && <div className="todo-meta">{meta}</div>}
       </div>
+      {dueChip && (
+        <span className={`due-chip${todo.done ? ' due-chip--muted' : dueChip.overdue ? ' due-chip--overdue' : ''}`}>
+          {dueChip.text}
+        </span>
+      )}
+      <button
+        type="button"
+        className="due-icon-button"
+        onClick={() => setEditingDue((v) => !v)}
+        aria-label="Todoの期限を設定"
+      >
+        📅
+      </button>
       <ConfirmDeleteButton onDelete={onDelete} label="削除" />
+      {editingDue && (
+        <div className="todo-due-editor-inline">
+          <DueDateEditor
+            value={todo.dueDate}
+            onSave={(v) => {
+              onDueDateChange(v);
+              setEditingDue(false);
+            }}
+            onCancel={() => setEditingDue(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

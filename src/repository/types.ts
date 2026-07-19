@@ -18,14 +18,19 @@ export interface Repository {
 
   createStep(input: { goalId: string; title: string }): Promise<Step>;
   // goalId はv2.1(ドラッグ&ドロップ)で追加。別ゴールへの移動時にステップの所属を付け替えるために必要。
-  updateStep(id: string, patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId'>>): Promise<void>;
+  // dueDate はv3.1で追加。
+  updateStep(
+    id: string,
+    patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId' | 'dueDate'>>
+  ): Promise<void>;
   deleteStep(id: string): Promise<void>;
 
   createTodo(input: { stepId: string; title: string }): Promise<Todo>;
   // stepId はv2.1(ドラッグ&ドロップ)で追加。別ステップへの移動時にTodoの所属を付け替えるために必要。
+  // dueDate はv3.1で追加。
   updateTodo(
     id: string,
-    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId'>>
+    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId' | 'dueDate'>>
   ): Promise<void>;
   deleteTodo(id: string): Promise<void>;
 

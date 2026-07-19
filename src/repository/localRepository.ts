@@ -43,8 +43,17 @@ function loadStorage(): StoredData {
     ...(g as unknown as Goal),
     folderId: (g.folderId as string | null | undefined) ?? null,
   }));
-  const steps: Step[] = Array.isArray(obj.steps) ? (obj.steps as Step[]) : [];
-  const todos: Todo[] = Array.isArray(obj.todos) ? (obj.todos as Todo[]) : [];
+  const stepsRaw = Array.isArray(obj.steps) ? (obj.steps as Array<Record<string, unknown>>) : [];
+  const todosRaw = Array.isArray(obj.todos) ? (obj.todos as Array<Record<string, unknown>>) : [];
+  // v3.1マイグレーション: dueDateが無いstep/todoにnullを補う(他のフィールドはスプレッドで保持)
+  const steps: Step[] = stepsRaw.map((s) => ({
+    ...(s as unknown as Step),
+    dueDate: (s.dueDate as string | null | undefined) ?? null,
+  }));
+  const todos: Todo[] = todosRaw.map((t) => ({
+    ...(t as unknown as Todo),
+    dueDate: (t.dueDate as string | null | undefined) ?? null,
+  }));
 
   return { folders, goals, steps, todos };
 }
@@ -180,6 +189,7 @@ export class LocalRepository implements Repository {
       title: input.title,
       sortOrder: maxSort + 1,
       status: 'active',
+      dueDate: null,
       createdAt: nowIso(),
     };
     this.data.steps.push(step);
@@ -187,7 +197,10 @@ export class LocalRepository implements Repository {
     return step;
   }
 
-  async updateStep(id: string, patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId'>>): Promise<void> {
+  async updateStep(
+    id: string,
+    patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId' | 'dueDate'>>
+  ): Promise<void> {
     // in-place mutateしない(理由はupdateFolder参照)
     const idx = this.data.steps.findIndex((s) => s.id === id);
     if (idx === -1) return;
@@ -211,6 +224,7 @@ export class LocalRepository implements Repository {
       title: input.title,
       done: false,
       sortOrder: maxSort + 1,
+      dueDate: null,
       createdAt: nowIso(),
       completedAt: null,
     };
@@ -221,7 +235,7 @@ export class LocalRepository implements Repository {
 
   async updateTodo(
     id: string,
-    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId'>>
+    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId' | 'dueDate'>>
   ): Promise<void> {
     // in-place mutateしない(理由はupdateFolder参照)
     const idx = this.data.todos.findIndex((t) => t.id === id);

@@ -26,6 +26,7 @@ export interface Step {
   title: string;
   sortOrder: number;
   status: StepStatus;
+  dueDate: string | null; // ISO date (YYYY-MM-DD) | null = 無期限(v3.1追加)
   createdAt: string;
 }
 
@@ -35,6 +36,7 @@ export interface Todo {
   title: string;
   done: boolean;
   sortOrder: number;
+  dueDate: string | null; // ISO date (YYYY-MM-DD) | null = 無期限(v3.1追加)
   createdAt: string;
   completedAt: string | null;
 }

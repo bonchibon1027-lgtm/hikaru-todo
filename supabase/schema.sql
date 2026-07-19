@@ -5,6 +5,8 @@
 -- supabase/migration-v1.2.sql を実行してください(このファイルを再実行してもfoldersテーブル追加/
 -- goals.folder_id列追加は `if not exists` / `add column if not exists` 相当で安全ですが、
 -- 個別ALTER文が欲しい場合はmigration-v1.2.sqlを使ってください)。
+-- 既にv3.0以前のテーブルが存在するプロジェクトにv3.1(ステップ・Todoの期限)だけを追加したい場合は
+-- supabase/migration-v3.1.sql を実行してください。
 
 create extension if not exists "pgcrypto";
 
@@ -37,6 +39,7 @@ create table if not exists public.steps (
   title       text not null,
   sort_order  integer not null default 0,
   status      text not null default 'active' check (status in ('active', 'done')),
+  due_date    date null, -- v3.1で追加。null = 無期限
   created_at  timestamptz not null default now()
 );
 
@@ -48,6 +51,7 @@ create table if not exists public.todos (
   title         text not null,
   done          boolean not null default false,
   sort_order    integer not null default 0,
+  due_date      date null, -- v3.1で追加。null = 無期限
   created_at    timestamptz not null default now(),
   completed_at  timestamptz null
 );

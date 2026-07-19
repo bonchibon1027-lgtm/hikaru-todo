@@ -24,6 +24,7 @@ interface StepRow {
   title: string;
   sort_order: number;
   status: Step['status'];
+  due_date: string | null;
   created_at: string;
 }
 interface TodoRow {
@@ -32,6 +33,7 @@ interface TodoRow {
   title: string;
   done: boolean;
   sort_order: number;
+  due_date: string | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -62,6 +64,7 @@ function stepFromRow(r: StepRow): Step {
     title: r.title,
     sortOrder: r.sort_order,
     status: r.status,
+    dueDate: r.due_date,
     createdAt: r.created_at,
   };
 }
@@ -72,6 +75,7 @@ function todoFromRow(r: TodoRow): Todo {
     title: r.title,
     done: r.done,
     sortOrder: r.sort_order,
+    dueDate: r.due_date,
     createdAt: r.created_at,
     completedAt: r.completed_at,
   };
@@ -196,13 +200,17 @@ export class SupabaseRepository implements Repository {
     return stepFromRow(data as StepRow);
   }
 
-  async updateStep(id: string, patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId'>>): Promise<void> {
+  async updateStep(
+    id: string,
+    patch: Partial<Pick<Step, 'title' | 'status' | 'sortOrder' | 'goalId' | 'dueDate'>>
+  ): Promise<void> {
     const db = client();
     const row: Record<string, unknown> = {};
     if (patch.title !== undefined) row.title = patch.title;
     if (patch.status !== undefined) row.status = patch.status;
     if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
     if (patch.goalId !== undefined) row.goal_id = patch.goalId;
+    if (patch.dueDate !== undefined) row.due_date = patch.dueDate;
     const { error } = await db.from('steps').update(row).eq('id', id);
     if (error) throw error;
   }
@@ -233,7 +241,7 @@ export class SupabaseRepository implements Repository {
 
   async updateTodo(
     id: string,
-    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId'>>
+    patch: Partial<Pick<Todo, 'title' | 'done' | 'sortOrder' | 'completedAt' | 'stepId' | 'dueDate'>>
   ): Promise<void> {
     const db = client();
     const row: Record<string, unknown> = {};
@@ -242,6 +250,7 @@ export class SupabaseRepository implements Repository {
     if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
     if (patch.completedAt !== undefined) row.completed_at = patch.completedAt;
     if (patch.stepId !== undefined) row.step_id = patch.stepId;
+    if (patch.dueDate !== undefined) row.due_date = patch.dueDate;
     const { error } = await db.from('todos').update(row).eq('id', id);
     if (error) throw error;
   }
@@ -287,6 +296,7 @@ export class SupabaseRepository implements Repository {
       title: step.title,
       sort_order: step.sortOrder,
       status: step.status,
+      due_date: step.dueDate,
       created_at: step.createdAt,
     });
     if (error) throw error;
@@ -300,6 +310,7 @@ export class SupabaseRepository implements Repository {
       title: todo.title,
       done: todo.done,
       sort_order: todo.sortOrder,
+      due_date: todo.dueDate,
       created_at: todo.createdAt,
       completed_at: todo.completedAt,
     });

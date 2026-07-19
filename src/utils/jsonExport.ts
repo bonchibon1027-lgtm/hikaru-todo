@@ -7,12 +7,14 @@ import type { Folder, Goal, Step, Todo } from '../types';
 interface ExportTodo {
   title: string;
   done?: true;
+  dueDate?: string;
 }
 
 interface ExportStep {
   title: string;
   todos: ExportTodo[];
   status?: 'done';
+  dueDate?: string;
 }
 
 interface ExportGoal {
@@ -40,10 +42,18 @@ function buildGoalExport(goal: Goal, steps: Step[], todos: Todo[]): ExportGoal {
       const stepTodos = todos.filter((t) => t.stepId === step.id).sort((a, b) => a.sortOrder - b.sortOrder);
       const exportedStep: ExportStep = {
         title: step.title,
-        todos: stepTodos.map((t) => (t.done ? { title: t.title, done: true } : { title: t.title })),
+        todos: stepTodos.map((t) => {
+          const exportedTodo: ExportTodo = { title: t.title };
+          if (t.done) exportedTodo.done = true;
+          if (t.dueDate) exportedTodo.dueDate = t.dueDate;
+          return exportedTodo;
+        }),
       };
       if (step.status === 'done') {
         exportedStep.status = 'done';
+      }
+      if (step.dueDate) {
+        exportedStep.dueDate = step.dueDate;
       }
       return exportedStep;
     }),

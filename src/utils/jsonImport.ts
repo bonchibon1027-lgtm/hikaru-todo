@@ -4,6 +4,8 @@ export interface ImportTodoInput {
   title: string;
   /** v2追加。エクスポートJSONの再インポート用。省略時はfalse扱い */
   done: boolean;
+  /** v3.1追加。省略時はnull(無期限)扱い */
+  dueDate: string | null;
 }
 
 export interface ImportStepInput {
@@ -11,6 +13,8 @@ export interface ImportStepInput {
   todos: ImportTodoInput[];
   /** v2追加。エクスポートJSONの再インポート用。省略時は'active'扱い */
   status: 'active' | 'done';
+  /** v3.1追加。省略時はnull(無期限)扱い */
+  dueDate: string | null;
 }
 
 export interface ImportGoalInput {
@@ -56,6 +60,24 @@ function isValidDateString(s: string): boolean {
   return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
 }
 
+/**
+ * dueDateフィールドの共通パース&バリデーション(v3.1追加)。
+ * ゴール・ステップ・Todo(オブジェクト形式)いずれの `dueDate` フィールドにも使う。
+ * 省略またはnullは無期限(null)扱い。
+ */
+function parseDueDateField(
+  raw: Record<string, unknown>,
+  label: string
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (raw.dueDate === undefined || raw.dueDate === null) {
+    return { ok: true, value: null };
+  }
+  if (typeof raw.dueDate !== 'string' || !isValidDateString(raw.dueDate)) {
+    return { ok: false, error: `${label}のdueDateの形式が正しくありません(YYYY-MM-DD)` };
+  }
+  return { ok: true, value: raw.dueDate };
+}
+
 type GoalParseResult =
   | { ok: true; goal: ImportGoalInput; stepCount: number; todoCount: number }
   | { ok: false; error: string };
@@ -69,13 +91,9 @@ function parseGoalInput(raw: unknown, label: string): GoalParseResult {
     return { ok: false, error: `${label}にtitleがありません` };
   }
 
-  let dueDate: string | null = null;
-  if (raw.dueDate !== undefined && raw.dueDate !== null) {
-    if (typeof raw.dueDate !== 'string' || !isValidDateString(raw.dueDate)) {
-      return { ok: false, error: `${label}のdueDateの形式が正しくありません(YYYY-MM-DD)` };
-    }
-    dueDate = raw.dueDate;
-  }
+  const goalDueDateResult = parseDueDateField(raw, label);
+  if (!goalDueDateResult.ok) return goalDueDateResult;
+  const dueDate = goalDueDateResult.value;
 
   const stepsRaw = raw.steps === undefined ? [] : raw.steps;
   if (!Array.isArray(stepsRaw)) {
@@ -103,6 +121,11 @@ function parseGoalInput(raw: unknown, label: string): GoalParseResult {
       status = s.status;
     }
 
+    // dueDate(v3.1追加): 省略時はnull(無期限)
+    const stepDueDateResult = parseDueDateField(s, sLabel);
+    if (!stepDueDateResult.ok) return stepDueDateResult;
+    const stepDueDate = stepDueDateResult.value;
+
     const todosRaw = s.todos === undefined ? [] : s.todos;
     if (!Array.isArray(todosRaw)) {
       return { ok: false, error: `${sLabel}のtodosが配列ではありません` };
@@ -116,10 +139,10 @@ function parseGoalInput(raw: unknown, label: string): GoalParseResult {
         if (!t.trim()) {
           return { ok: false, error: `${tLabel}の形式が正しくありません` };
         }
-        todos.push({ title: t.trim(), done: false });
+        todos.push({ title: t.trim(), done: false, dueDate: null });
         continue;
       }
-      // オブジェクト形式(v2追加): { title, done } 。エクスポートJSONの再インポート用
+      // オブジェクト形式(v2追加): { title, done, dueDate } 。エクスポートJSONの再インポート用
       if (isPlainObject(t)) {
         if (typeof t.title !== 'string' || !t.title.trim()) {
           return { ok: false, error: `${tLabel}の形式が正しくありません` };
@@ -131,13 +154,16 @@ function parseGoalInput(raw: unknown, label: string): GoalParseResult {
           }
           done = t.done;
         }
-        todos.push({ title: t.title.trim(), done });
+        // dueDate(v3.1追加): 省略時はnull(無期限)
+        const todoDueDateResult = parseDueDateField(t, tLabel);
+        if (!todoDueDateResult.ok) return todoDueDateResult;
+        todos.push({ title: t.title.trim(), done, dueDate: todoDueDateResult.value });
         continue;
       }
       return { ok: false, error: `${tLabel}の形式が正しくありません` };
     }
 
-    steps.push({ title: s.title.trim(), todos, status });
+    steps.push({ title: s.title.trim(), todos, status, dueDate: stepDueDate });
     todoCount += todos.length;
   }
 
